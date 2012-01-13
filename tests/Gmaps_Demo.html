@@ -1,0 +1,136 @@
+<!-- Google Maps toolbar and this basic implementation page are from http://nettique.free.fr/gmap/toolbar.html -->
+<!-- Modified to be used as a source of map overlay features to give a test / demonstration of shapefile
+	 export javascript code by Harry Gibson -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+    <title>google map draw features and export to shapefile</title>
+    <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script>
+   <style type="text/css">
+body {
+  font-family: Arial, sans serif;
+  font-size: 11px;
+}
+#hand_b {
+  width:31px;
+  height:31px;
+  background-image: url(http://google.com/mapfiles/ms/t/Bsu.png);
+}
+#hand_b.selected {
+  background-image: url(http://google.com/mapfiles/ms/t/Bsd.png);
+}
+
+#placemark_b {
+  width:31px;
+  height:31px;
+  background-image: url(http://google.com/mapfiles/ms/t/Bmu.png);
+}
+#placemark_b.selected {
+  background-image: url(http://google.com/mapfiles/ms/t/Bmd.png);
+}
+
+#line_b {
+  width:31px;
+  height:31px;
+  background-image: url(http://google.com/mapfiles/ms/t/Blu.png);
+}
+#line_b.selected {
+  background-image: url(http://google.com/mapfiles/ms/t/Bld.png);
+}
+
+#shape_b {
+  width:31px;
+  height:31px;
+  background-image: url(http://google.com/mapfiles/ms/t/Bpu.png);
+}
+#shape_b.selected {
+  background-image: url(http://google.com/mapfiles/ms/t/Bpd.png);
+}
+</style>
+
+<script type="text/javascript" src="../lib/mapToolbar.js">
+/* Gmaps toolbar script from nettique.free.fr */
+</script>
+<script type="text/javascript" src ="../lib/FileSaver.min.js">
+/* FileSaver script from eligrey.com */
+</script>
+	
+<script type="text/javascript" src="../src/JSShapefile_Webkit.js"></script>
+
+  </head>
+<body>
+<h1>google maps -> draw features -> export to shapefile (WEBKIT BROWSER ONLY)</h1>
+<table><tr style="vertical-align:top">
+  <td style="width:15em">
+
+<table><tr>
+<td><div id="hand_b"
+	 onclick="MapToolbar.stopEditing()"/></td>
+<td><div id="placemark_b"
+onclick="MapToolbar.initFeature('placemark')"/></td>
+<td><div id="line_b"
+	 onclick="MapToolbar.initFeature('line')"/></td>
+<td><div id="shape_b"
+	onclick="MapToolbar.initFeature('shape')"/></td>
+</tr></table>
+
+    <input type="hidden" id="featuredetails" rows=2>
+	<p>click on an icon to add a feature.
+	click on the 'hand' icon to stop line edition or shape edition
+	click on the name of the feature on the sidebar to edit it again.
+	</p>
+<button onclick = "exportShapefiles()">Export shapefiles!</button>
+    </input>
+
+     <table id ="featuretable">
+     <tbody id="featuretbody"></tbody>
+    </table>
+  </td>
+  <td>
+    <!-- The frame used to measure the screen size -->
+    <!-- <div id="frame"></div>  -->
+
+    <div id="map" style="width: 700px; height: 550px"></div>
+  </td>
+</tr></table>
+<script type="text/javascript">
+  initialize();
+  function exportShapefiles(){
+  	var shapewriter = new Shapefile({shapetype:"POINT"});
+	var googleGraphics = [];
+	for (var g in MapToolbar.features.placemarkTab){
+		if (MapToolbar.features.placemarkTab.hasOwnProperty(g)){
+			googleGraphics.push(MapToolbar.features.placemarkTab[g]);
+		}
+	}
+	for (var g in MapToolbar.features.lineTab){
+		if (MapToolbar.features.lineTab.hasOwnProperty(g)){
+			googleGraphics.push(MapToolbar.features.lineTab[g]);
+		}
+	}
+	for (var g in MapToolbar.features.shapeTab){
+		if (MapToolbar.features.shapeTab.hasOwnProperty(g)){
+			googleGraphics.push(MapToolbar.features.shapeTab[g]);
+		}
+	}
+	shapewriter.addGoogleGraphics(googleGraphics);
+	var pointfile = shapewriter.getShapefile();
+	shapewriter.shapetype = "POLYLINE";
+	var linefile = shapewriter.getShapefile();
+	shapewriter.shapetype = "POLYGON";
+	var polygonfile = shapewriter.getShapefile();
+	saveAs(pointfile["shape"],"g_points.shp");
+	saveAs(pointfile["shx"],"g_points.shx");
+	saveAs(pointfile["dbf"],"g_points.dbf");
+	saveAs(linefile["shape"],"g_lines.shp");
+	saveAs(linefile["shx"],"g_lines.shx");
+	saveAs(linefile["dbf"],"g_lines.dbf");
+	saveAs(polygonfile["shape"],"g_polygons.shp");
+	saveAs(polygonfile["shx"],"g_polygons.shx");
+	saveAs(polygonfile["dbf"],"g_polygons.dbf");
+  }
+</script>
+</body>
+</html>
