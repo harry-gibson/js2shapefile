@@ -157,6 +157,8 @@ Shapefile.prototype.getShapefile = function(){
 	}
 	var resultobject = {};
 	if (this.shapetype == "POINT" && this.pointgraphics.length > 0){
+		// the order of the graphics array must be unchanged between creating shp/shx and dbf
+		// all that links geometry to dbf record is the order in the file!
 		resultobject = this.createShapeShxFileWebkit(this.pointgraphics);
 		attributeMap = this.createAttributeMap(this.pointgraphics);
 		resultobject["dbf"] = this.createDbfWebkit(attributeMap, this.pointgraphics);
@@ -207,6 +209,7 @@ Shapefile.prototype.createShapeShxFileWebkit = function(graphics){
 		case "POINT":
 			// length of record is fixed at 20 for points, being 1 int and 2 doubles in a point record
 			var byteLengthOfRecord = 20;
+			var byteLengthOfRecordInclHeader = byteLengthOfRecord+byteLengthOfRecordHeader;
 			for (var i = 1; i < numRecords + 1; i++) { // record numbers begin at 1 not 0
 				var graphic = graphics[i - 1];
 				var x = graphic.geometry["x"];
@@ -229,16 +232,19 @@ Shapefile.prototype.createShapeShxFileWebkit = function(graphics){
 				recordDataView.setInt32(8, ShapeTypes[this.shapetype], true); // 1=Point. LITTLE endian! 
 				recordDataView.setFloat64(12, x, true); //little-endian
 				recordDataView.setFloat64(20, y, true); //little-endian
-				//byteFileLength += (byteLengthOfRecordHeader + byteLengthOfRecord);
-				byteFileLength += (28); // fixed at 28 for points
 				shapeContentBlobObject.append(recordBuffer);
 				// now do the shx record
 				var shxBuffer = new ArrayBuffer(8);
 				var shxDataView = new DataView(shxBuffer);
 				//shxDataView.setInt32(0, (i - 1) * ((byteLengthOfRecord + byteLengthOfRecordHeader) / 2) + 50);
 				shxDataView.setInt32(0, byteFileLength / 2); // shx record gives offset in shapefile of record start
-				shxDataView.setInt32(4, byteLengthOfRecord / 2); // and the length in shapefile of record
+				shxDataView.setInt32(4, (byteLengthOfRecord / 2)); // and the length in shapefile of record
 				shxContentBlobObject.append(shxBuffer);
+				byteFileLength += byteLengthOfRecordInclHeader; // fixed at 28 for points
+				
+				//console.log ("Writing SHP/SHX record for searchId "+ graphic.attributes['SEARCHID'] 
+				//	+ "and type " +graphic.attributes['TYPE']+" to row "+ (i-1).toString());
+
 			}
 			break;
 		case "POLYLINE":
@@ -536,9 +542,10 @@ Shapefile.prototype._createDbfRecordsWebkit = function(attributeMap,attributeDat
 	var currentOffset=0;
 	for (var rownum=0;rownum<attributeData.length;rownum++){
 		var rowData = attributeData[rownum].attributes || {};
+		//console.log ("Writing DBF record for searchId "+rowData['SEARCHID'] + 
+		//	" and type " + rowData['TYPE'] + "to row "+rownum);
 		var recordStartOffset = rownum*(recordLength); // recordLength includes the byte for deletion flag
 		//var currentOffset = rownum*(recordLength);
-		console.log("Starting record "+rownum+" at byte offset "+currentOffset);
 		dbfDataView.setUint8(currentOffset,32); // Deletion flag: not deleted. 20h = 32, space
 		currentOffset+=1;
 		for (var attribNum = 0; attribNum < attributeMap.length; attribNum++)
@@ -550,7 +557,7 @@ Shapefile.prototype._createDbfRecordsWebkit = function(attributeMap,attributeDat
 			var fieldLength = parseInt(attribInfo["length"]) || 0; // it isn't alterable for L or D type fields
 			var attValue =  rowData[attName] || rownum.toString(); // use incrementing number if attribute is missing,
 			// this will come into play if there were no attributes in the original graphics, hence the attributeMap contains "ID_AUTO"
-			var fieldLength;
+			//var fieldLength;
 			if (dataType == "L"){
 				fieldLength = 1;
 				if (attValue){
@@ -593,6 +600,10 @@ Shapefile.prototype._createDbfRecordsWebkit = function(attributeMap,attributeDat
 			}
 			else if (dataType == "C" || dataType == ""){
 				if (fieldLength == 0) { continue; }
+				if (typeof(attValue) !== "string"){
+					// just in case a rogue number has got in...
+					attValue = attValue.toString();
+				}
 				if (attValue.length < fieldLength) {
 					attValue = attValue.rpad(" ", fieldLength);
 				}
@@ -605,7 +616,6 @@ Shapefile.prototype._createDbfRecordsWebkit = function(attributeMap,attributeDat
 			}
 		}
 		// row done, rinse and repeat
-		console.log("ended record "+rownum+" byte offset is now "+currentOffset);
 	}
 	// all rows written, write EOF
 	dbfDataView.setUint8(dataLength-1,26);
