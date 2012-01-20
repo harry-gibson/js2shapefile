@@ -1,0 +1,91 @@
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html;charset=x-user-defined">
+<script type="text/javascript" src ="../lib/FileSaver.js"></script>
+<script type="text/javascript" src="../lib/jDataView_write.js"></script>
+<script type="text/javascript" src="../src/JSShapefile_Generic.js"></script>
+<script type="text/javascript" src="../lib/jszip.js"></script>
+<script type="text/javascript" src="../lib/downloadify/js/swfobject.js"></script>
+<script type="text/javascript" src="../lib/downloadify/js/downloadify.min.js"></script>
+<script type="text/javascript">
+	//var f = getShapefileBlob();
+	
+	function createRandomGraphics(number){
+		var graphicArray = [];
+		var xmin = 300000, ymin=300000, xmax=350000,ymax=350000;
+		for (var i = 0; i<number; i++){
+		var trueorfalse = Math.floor(((Math.random() / Math.random()) * 10) % 2) == 0;
+		var decimal = 1/(Math.pow(Math.random(),3));
+		//var east = Math.random()*50000+xmin;
+		//var north =  Math.random()*50000+ymin;
+			
+		var graphic = 
+		{	geometry: 
+			{
+			x: Math.random()*50000+xmin, 
+			y: Math.random()*50000+ymin,
+			type: "point"
+			},
+			attributes:
+			{
+				ID: i,
+				text: "hello",
+				dec: decimal,
+				log: trueorfalse,
+				birthday: "19791203",
+				unknownattribute: "boo"
+			}
+		}
+		graphicArray.push(graphic);
+		}
+		return graphicArray;
+	}
+	
+	function testPointShape(){
+        var someGraphics = createRandomGraphics(10);
+        var shapewriter = new Shapefile({shapetype:"POINT"});
+		shapewriter.addESRIGraphics(someGraphics);
+		var res = shapewriter.getShapefile_generic();
+        shapewriter.addESRIGraphics(someGraphics);
+		//var bin = shapewriter.getShapefile();
+        
+		//var dbf = createDbf(attributeMap, someGraphics);
+        saveAs(res["shape"], "test_generic.shp");
+        saveAs(res["shx"], "test_generic.shx");
+        saveAs(res["dbf"], "test_generic.dbf");
+		//saveAs(bin["shape"], "test_bin.shp");
+        //saveAs(bin["shx"], "test_bin.shx");
+        //saveAs(bin["dbf"], "test_bin.dbf");
+		
+		}
+	function testPointShape_SWF(){
+		var someGraphics = createRandomGraphics(10);
+        var shapewriter = new Shapefile({shapetype:"POINT"});
+		shapewriter.addESRIGraphics(someGraphics);
+		var res = shapewriter.getShapefile_generic();
+        shapewriter.addESRIGraphics(someGraphics);
+		var zip = new JSZip();
+		zip.add("test.shp",encodeBase64(res["shape"].data),{base64:true});
+		zip.add("test.shx",encodeBase64(res["shx"].data),{base64:true});
+		zip.add("test.dbf",encodeBase64(res["dbf"].data),{base64:true});
+		return zip.generate();
+		//return encodeBase64(res["shape"].data);
+	}
+	function load(){
+		Downloadify.create('saveBtn', {
+			swf: '../lib/downloadify/media/downloadify.swf',
+			downloadImage: '../lib/downloadify/images/download.png',
+			width: 175,
+			height: 30,
+			filename: "test_shapezip.zip",
+			data: function(){
+				return testPointShape_SWF();
+			},
+			dataType: 'base64',
+			append: true
+		});
+	}
+</script>
+</head>
+<body onload="load();"><p id='saveBtn'>DL button here</p></body>
+</html>
