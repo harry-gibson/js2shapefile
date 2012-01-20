@@ -61,6 +61,16 @@ String.prototype.rpad = function(padString, length) {
         str = str + padString;
     return str;
 }
+if(!Array.indexOf){
+	    Array.prototype.indexOf = function(obj){
+	        for(var i=0; i<this.length; i++){
+	            if(this[i]==obj){
+	                return i;
+	            }
+	        }
+	        return -1;
+	    }
+}
 
 var Shapefile = function (params){
 	this.shapetype = params.shapetype;
@@ -87,7 +97,6 @@ Shapefile.prototype.addESRIGraphics = function(esrigraphics){
 }
 Shapefile.prototype.addOLGraphics = function (openlayersgraphics){
 	// "translate" the openlayers graphics item to something compatible with the esri format before adding
-	// see demo editing toolbar at http://nettique.free.fr/maps/OpenLayersEditingToolbar.html
 	for (var i=0;i<openlayersgraphics.length;i++){
 		var quasiEsriGraphic = {
 			geometry:{
@@ -151,11 +160,24 @@ Shapefile.prototype.clearAllGraphics = function(){
 	this.polylinegraphics = [];
 	this.polygongraphics = [];
 }
-Shapefile.prototype.getShapefile = function(){
-	if (!(WebKitBlobBuilder && DataView)){
-		alert("Sorry, this only works with a Webkit browser at present. Try Google Chrome!");
-		return;
+Shapefile.prototype.getShapefile_generic = function(){
+	var resultobject = {};
+	if (this.shapetype == "POINT" && this.pointgraphics.length > 0){
+		// the order of the graphics array must be unchanged between creating shp/shx and dbf
+		// all that links geometry to dbf record is the order in the file!
+		resultobject=this.createShapeShxFile(this.pointgraphics);
+		attributeMap = this.createAttributeMap(this.pointgraphics);
+		resultobject["dbf"] = this.createDbf(attributeMap, this.pointgraphics);
+		this.pointgraphics = [];
 	}
+	return resultobject;
+	
+}
+Shapefile.prototype.getShapefile = function(){
+	//if (!(WebKitBlobBuilder && DataView)){
+	//	alert("Sorry, this only works with a Webkit browser at present. Try Google Chrome!");
+	//	return;
+	//}
 	var resultobject = {};
 	if (this.shapetype == "POINT" && this.pointgraphics.length > 0){
 		// the order of the graphics array must be unchanged between creating shp/shx and dbf
@@ -179,7 +201,107 @@ Shapefile.prototype.getShapefile = function(){
 	}
 	return resultobject;
 }
+Shapefile.prototype.createShapeShxFile = function(graphics){
+	var headerBuf = jDataView_write.createEmptyBuffer(100,true);
+	var shxHeaderBuf = jDataView_write.createEmptyBuffer(100,true);
+	var headerDataView = new jDataView_write(headerBuf,100,true); // true to write debug information
+	var shxHeaderView = new jDataView_write(shxHeaderBuf,100);
+	headerDataView.setInt32(0, 9994); //big-endian
+	shxHeaderView.setInt32(0, 9994); //big-endian
+	headerDataView.setInt32(28, 1000, true); //little-endian, why on earth are they mixed?
+	shxHeaderView.setInt32(28, 1000, true); //little-endian
+	// will need to set file length in 16 bit words at byte 24, big-endian
+	// now set shape type
+	headerDataView.setInt32(32, ShapeTypes[this.shapetype], true); // little-endian
+	shxHeaderView.setInt32(32, ShapeTypes[this.shapetype], true); // little-endian
+	// now start work on the file contents
+	// will get extent by naive method of increasing or decreasing the min / max for each feature outside those currently set
+	var ext_xmin = Number.MAX_VALUE, ext_ymin = Number.MAX_VALUE, ext_xmax = Number.MIN_VALUE, ext_ymax = Number.MIN_VALUE;
+	var numRecords = graphics.length;
+	//var shapeContentBlobObject = new WebKitBlobBuilder();
+	//var shxContentBlobObject = new WebKitBlobBuilder();
+	var shapeContentBlobObject = new BlobBuilder();
+	var shxContentBlobObject = new BlobBuilder();
+	
+	var byteFileLength = 100; // length of overall file, min of 100 bytes of the header, plus the contents
+	var byteShxLength = 100;
+	var byteLengthOfRecordHeader = 8; // 2 integers, same for all shape types
+	// point shapefile records have a fairly simple structure
+	// polylines and polygons have a few more bits but are identical to one another bar some names
+	switch (this.shapetype) {
+		case "POINT":
+			// length of record is fixed at 20 for points, being 1 int and 2 doubles in a point record
+			var byteLengthOfRecord = 20;
+			var byteLengthOfRecordInclHeader = byteLengthOfRecord+byteLengthOfRecordHeader;
+			for (var i = 1; i < numRecords + 1; i++) { // record numbers begin at 1 not 0
+				var graphic = graphics[i - 1];
+				var x = graphic.geometry["x"];
+				var y = graphic.geometry["y"];
+				if (x < ext_xmin) 
+					ext_xmin = x;
+				if (x > ext_xmax) 
+					ext_xmax = x;
+				if (y < ext_ymin) 
+					ext_ymin = y;
+				if (y > ext_ymax) 
+					ext_ymax = y;
+				// we'll write the record header and content into a single arraybuffer
+				//var recordBuffer = new ArrayBuffer(byteLengthOfRecordHeader + byteLengthOfRecord);
+				var recordBuffer = jDataView_write.createEmptyBuffer(28,true)// length is fixed for points
+				var recordDataView = new jDataView_write(recordBuffer,null);
+				recordDataView.setInt32(0, i); // big-endian
+				recordDataView.setInt32(4, byteLengthOfRecord / 2); // NB divide by 2 as value is in 16 bit words
+				//now the record content
+				recordDataView.setInt32(8, ShapeTypes[this.shapetype], true); // 1=Point. LITTLE endian! 
+				recordDataView.setFloat64(12, x, true); //little-endian
+				recordDataView.setFloat64(20, y, true); //little-endian
+				shapeContentBlobObject.append(recordDataView.getBuffer());
+				// now do the shx record
+				var shxBuffer = jDataView_write.createEmptyBuffer(8,true);
+				var shxDataView = new jDataView_write(shxBuffer,8,false);
+				//shxDataView.setInt32(0, (i - 1) * ((byteLengthOfRecord + byteLengthOfRecordHeader) / 2) + 50);
+				shxDataView.setInt32(0, byteFileLength / 2); // shx record gives offset in shapefile of record start
+				shxDataView.setInt32(4, (byteLengthOfRecord / 2)); // and the length in shapefile of record
+				shxContentBlobObject.append(shxDataView.getBuffer());
+				byteFileLength += byteLengthOfRecordInclHeader; // fixed at 28 for points
+				
+				//console.log ("Writing SHP/SHX record for searchId "+ graphic.attributes['SEARCHID'] 
+				//	+ "and type " +graphic.attributes['TYPE']+" to row "+ (i-1).toString());
 
+			}
+			break;
+		default:
+		alert("Unknown shape type specified!");
+	}
+	// now we can build the rest of the file headers as we know the extent and length
+	headerDataView.setFloat64(36,ext_xmin,true); //little endian
+	headerDataView.setFloat64(44,ext_ymin,true); //little endian
+	headerDataView.setFloat64(52,ext_xmax,true); //little endian
+	headerDataView.setFloat64(60,ext_ymax,true); //little endian
+	shxHeaderView.setFloat64(36,ext_xmin,true); //little endian
+	shxHeaderView.setFloat64(44,ext_ymin,true); //little endian
+	shxHeaderView.setFloat64(52,ext_xmax,true); //little endian
+	shxHeaderView.setFloat64(60,ext_ymax,true); //little endian
+	headerDataView.setInt32(24,byteFileLength/2);
+	shxHeaderView.setInt32(24,(50+numRecords*4));
+	
+	// all done. make the final blob objects
+	//var shapeFileBlobObject = new WebKitBlobBuilder();
+	var shapeFileBlobObject = new BlobBuilder();
+	//var binaryString = headerDataView.getBuffer();
+	//var b64string = encodeBase64(binaryString);
+	//shapeFileBlobObject.append(b64string);
+	shapeFileBlobObject.append(headerDataView.getBuffer());
+	shapeFileBlobObject.append(shapeContentBlobObject.getBlob("application/octet-stream"));
+	//var shxFileBlobObject = new WebKitBlobBuilder();
+	var shxFileBlobObject = new BlobBuilder();
+	shxFileBlobObject.append(shxHeaderView.getBuffer());
+	shxFileBlobObject.append(shxContentBlobObject.getBlob("application/octet-stream"));
+	return {shape: 	shapeFileBlobObject.getBlob("application/octet-stream"),
+			shx:	shxFileBlobObject.getBlob("application/octet-stream")};
+
+	
+}
 
 Shapefile.prototype.createShapeShxFileWebkit = function(graphics){
 	// create 100-byte header for the shp and shx files
@@ -380,10 +502,10 @@ Shapefile.prototype.createShapeShxFileWebkit = function(graphics){
 	// all done. make the final blob objects
 	var shapeFileBlobObject = new WebKitBlobBuilder();
 	shapeFileBlobObject.append(headerBuf);
-	shapeFileBlobObject.append(shapeContentBlobObject.getBlob());
+	//shapeFileBlobObject.append(shapeContentBlobObject.getBlob());
 	var shxFileBlobObject = new WebKitBlobBuilder();
 	shxFileBlobObject.append(shxHeaderBuf);
-	shxFileBlobObject.append(shxContentBlobObject.getBlob());
+	//shxFileBlobObject.append(shxContentBlobObject.getBlob());
 	return {shape: 	shapeFileBlobObject.getBlob(),
 			shx:	shxFileBlobObject.getBlob()};
 }
@@ -400,7 +522,8 @@ Shapefile.prototype.createDbfWebkit = function(attributeMap,graphics){
 	var dbfRecordLength = dbfInfo["recordLength"];
 	var dbfHeaderBlob = dbfInfo["dbfHeader"];
 	var dbfData = this._createDbfRecordsWebkit(attributeMap,graphics,dbfRecordLength);
-	var dbfBlob = new WebKitBlobBuilder();
+	//var dbfBlob = new WebKitBlobBuilder();
+	var dbfBlob = new BlobBuilder();
 	dbfBlob.append(dbfHeaderBlob.getBlob());
 	dbfBlob.append(dbfData.getBlob());
 	return dbfBlob.getBlob();
@@ -498,7 +621,8 @@ Shapefile.prototype._createDbfHeaderWebkit = function(attributeMap,numRecords){
 	//dbfHeaderView.setUint8(29,03) // language driver, 03 = windows ansi
 	// except for 29, bytes 12 - 31 are reserved or for things we don't need
 	// header section is complete, now build the overall header as a blob
-	var dbfHeaderBlob = new WebKitBlobBuilder();
+	//var dbfHeaderBlob = new WebKitBlobBuilder();
+	var dbfHeaderBlob = new BlobBuilder();
 	dbfHeaderBlob.append(dbfHeaderBuf);
 	dbfHeaderBlob.append(dbfFieldDescBuf);
 	return {
@@ -620,8 +744,254 @@ Shapefile.prototype._createDbfRecordsWebkit = function(attributeMap,attributeDat
 	}
 	// all rows written, write EOF
 	dbfDataView.setUint8(dataLength-1,26);
-	var dbfDataBlobObject = new WebKitBlobBuilder();
+	//var dbfDataBlobObject = new WebKitBlobBuilder();
+	var dbfDataBlobObject = new BlobBuilder();
 	dbfDataBlobObject.append(dbfDataBuf);
+	
+	return dbfDataBlobObject;
+}
+
+Shapefile.prototype.createDbf = function(attributeMap,graphics){
+	if (attributeMap.length == 0){
+		attributeMap.push({
+			name: "ID_AUTO",
+			type: "N",
+			length: "8"
+		});
+	}
+	var dbfInfo = this._createDbfHeader(attributeMap,graphics.length);
+	var dbfRecordLength = dbfInfo["recordLength"];
+	var dbfHeaderBlob = dbfInfo["dbfHeader"];
+	var dbfData = this._createDbfRecords(attributeMap,graphics,dbfRecordLength);
+	//var dbfBlob = new WebKitBlobBuilder();
+	var dbfBlob = new BlobBuilder();
+	dbfBlob.append(dbfHeaderBlob.getBlob("application/octet-stream"));
+	dbfBlob.append(dbfData.getBlob("application/octet-stream"));
+	return dbfBlob.getBlob("application/octet-stream");
+}
+
+Shapefile.prototype._createDbfHeader = function(attributeMap,numRecords){
+	// DBF File format references: see
+	// (XBase) http://www.clicketyclick.dk/databases/xbase/format/dbf.html#DBF_STRUCT
+	// http://www.quantdec.com/SYSEN597/GTKAV/section4/chapter_15a.htm
+	// http://ulisse.elettra.trieste.it/services/doc/dbase/DBFstruct.htm
+	/* attributes parameter will be in the format 
+		[ 
+			{ 
+				name: 	string,
+				type: 	string, // (1 character),
+				length: number, // only req if type is C or N, will be used if less than datatype maximum
+				value: 	string,  
+				scale:  number  // only req if type is N, will be used for "decimal count" property
+			}
+		]
+	*/
+	var numFields = attributeMap.length; // GET NUMBER OF FIELDS FROM PARAMETER
+	var fieldDescLength = 32 * numFields + 1;
+	//var dbfFieldDescBuf = new ArrayBuffer(fieldDescLength);
+	var dbfFieldDescBuf = jDataView_write.createEmptyBuffer(fieldDescLength,true);
+	var dbfFieldDescView = new jDataView_write(dbfFieldDescBuf,fieldDescLength,true);
+	var namesUsed = [];
+	var numBytesPerRecord = 1; // total is the length of all fields plus 1 for deletion flag
+	for (var i=0; i<numFields; i++){
+		// each field has 32 bytes in the header. These describe name, type, and length of the attribute  
+		var name = attributeMap[i].name.slice(0,10);
+		// need to check if the name has already been used and generate a altered one
+		// if so. not doing the check yet, better make sure we don't try duplicate names!
+		// NB older browsers don't have indexOf but given the other stuff we're doing with binary 
+		// i think that's the least of their worries
+		if (namesUsed.indexOf(name) == -1) {
+			namesUsed.push(name);
+		}
+		// write the name into bytes 0-9 of the field description
+		for (var x = 0; x < name.length; x++) {
+			dbfFieldDescView.setInt8(i*32+x, name.charCodeAt(x));
+		}
+		// nb byte 10 is left at zero
+		/* Now data type. Data types are 
+			C = Character. Max 254 characters.
+			N = Number, but stored as ascii text. Max 18 characters.
+			L = Logical, boolean. 1 byte, ascii. Values "Y", "N", "T", "F" or "?" are valid
+			D = Date, format YYYYMMDD, numbers
+		*/
+		var datatype = attributeMap[i].type || "C"
+		var fieldLength;
+		if (datatype == "L"){
+			fieldLength = 1;
+		}
+		else if (datatype == "D") {
+			fieldLength = 8;
+		}
+		else if (datatype == "N"){
+			// maximum length is 18
+			fieldLength = attributeMap[i].length && attributeMap[i].length<19 ? attributeMap[i].length : 18;
+		}
+		else if (datatype == "C"){
+			fieldLength = attributeMap[i].length && attributeMap[i].length<254 ? attributeMap[i].length : 254;
+		}
+		//else {
+		//	datatype == "C";
+		//	fieldLength = 254;
+		//}
+		// write the type into byte 11
+		dbfFieldDescView.setInt8(i*32+11,datatype.charCodeAt(0)); // FIELD TYPE
+		// write the length into byte 16
+		dbfFieldDescView.setInt8(i*32+16,fieldLength); //FIELD LENGTH
+		if (datatype = "N") {
+			var fieldDecCount = attributeMap[i].scale || 0;
+			// write the decimal count into byte 17
+			dbfFieldDescView.setInt8(i * 32 + 17, fieldDecCount); // FIELD DECIMAL COUNT
+		}
+		numBytesPerRecord += parseInt(fieldLength);
+	}
+	// last byte of the array is set to 0Dh (13, newline character) to mark end of overall header
+	dbfFieldDescView.setInt8(fieldDescLength - 1, 13)
+	// field map section is complete, now do the main header
+	//var dbfHeaderBuf = new ArrayBuffer(32);
+	var dbfHeaderBuf = jDataView_write.createEmptyBuffer(32,true);
+	var dbfHeaderView = new jDataView_write(dbfHeaderBuf,32,true);
+	dbfHeaderView.setUint8(0,3) // File Signature: DBF - UNSIGNED
+	var rightnow = new Date();
+	dbfHeaderView.setUint8(1,rightnow.getFullYear() - 1900); // UNSIGNED
+	dbfHeaderView.setUint8(2,rightnow.getMonth());  // UNSIGNED
+	dbfHeaderView.setUint8(3,rightnow.getDate());  // UNSIGNED
+	dbfHeaderView.setUint32(4,numRecords, true); // LITTLE ENDIAN, UNSIGNED
+	var totalHeaderLength = fieldDescLength + 31 + 1;
+	// the 31 bytes of this section, plus the length of the fields description, plus 1 at the end 
+	dbfHeaderView.setUint16(8,totalHeaderLength, true); // LITTLE ENDIAN , UNSIGNED
+	// the byte length of each record, which includes 1 initial byte as a deletion flag
+	dbfHeaderView.setUint16(10,numBytesPerRecord, true); // LITTLE ENDIAN, UNSIGNED
+	//dbfHeaderView.setUint8(29,03) // language driver, 03 = windows ansi
+	// except for 29, bytes 12 - 31 are reserved or for things we don't need
+	// header section is complete, now build the overall header as a blob
+	//var dbfHeaderBlob = new WebKitBlobBuilder();
+	var dbfHeaderBlob = new BlobBuilder();
+	dbfHeaderBlob.append(dbfHeaderView.getBuffer());
+	dbfHeaderBlob.append(dbfFieldDescView.getBuffer());
+	return {
+		recordLength: 	numBytesPerRecord,
+		dbfHeader:	 	dbfHeaderBlob
+	}
+}
+
+Shapefile.prototype._createDbfRecords = function(attributeMap,attributeData,recordLength){
+	/* PARAMETERS:
+	 * attributeData is an array of objects of structure
+	 * [{
+	 * 	something: xxx,
+	 *  somethingelse: xyz,
+	 *  attributes: {
+	 * 		attribname: value,
+	 * 		anotherattribname: value
+	 * 	}
+	 * }]
+	 * i.e. each object in the array must have an property called "attributes" which in turn contains 
+	 * the attributes of that object, and these must match those in the attributeMap 
+	 * other properties of the object are ignored. 
+	 * In other words attributeData is an array of esri.graphics, or something that looks like one! 
+	 * Each object is one record so the array must be in the same order as the array used to build the shapefile
+	 *   
+	 * attributeMap is the same object that was passed to the header-building function
+	 * this is used to confirm that they are the same, to get the order they appear in within a record, 
+	 * and to be able to ignore any attributes that we don't want to carry forward into the DBF.
+	 * 
+	 * Recordlength gives the byte length of a record as defined in the header
+	 * 
+	 * All record data is stored as ASCII, i.e. numbers as their ASCII representation rather than binary int etc
+	 * It appears that number fields are left padded with spaces to their defined length (data on right), 
+	 * and string fields are right padded.
+	 * 
+	 * There are almost certainly more ways to break this than there are ways to make it work! 
+	 */
+	// overall datalength is number of records * (length of record including 1 for deletion flag) +1 for EOF
+	var dataLength = (recordLength)*attributeData.length + 1;
+	//var dbfDataBuf = new ArrayBuffer(dataLength);
+	var dbfDataBuf = jDataView_write.createEmptyBuffer(dataLength,true);
+	var dbfDataView = new jDataView_write(dbfDataBuf,dataLength,true);
+	var currentOffset=0;
+	for (var rownum=0;rownum<attributeData.length;rownum++){
+		var rowData = attributeData[rownum].attributes || {};
+		//console.log ("Writing DBF record for searchId "+rowData['SEARCHID'] + 
+		//	" and type " + rowData['TYPE'] + "to row "+rownum);
+		var recordStartOffset = rownum*(recordLength); // recordLength includes the byte for deletion flag
+		//var currentOffset = rownum*(recordLength);
+		dbfDataView.setUint8(currentOffset,32); // Deletion flag: not deleted. 20h = 32, space
+		currentOffset+=1;
+		for (var attribNum = 0; attribNum < attributeMap.length; attribNum++)
+		{
+			// loop once for each attribute
+			var attribInfo = attributeMap[attribNum];
+			var attName = attribInfo["name"];
+			var dataType = attribInfo["type"] || "C";
+			var fieldLength = parseInt(attribInfo["length"]) || 0; // it isn't alterable for L or D type fields
+			var attValue =  rowData[attName] || rownum.toString(); // use incrementing number if attribute is missing,
+			// this will come into play if there were no attributes in the original graphics, hence the attributeMap contains "ID_AUTO"
+			//var fieldLength;
+			if (dataType == "L"){
+				fieldLength = 1;
+				if (attValue){
+					dbfDataView.setUint8(currentOffset,84); // 84 is ASCII for T
+				}
+				else {
+					dbfDataView.setUint8(currentOffset,70); // 70 is ASCII for F
+				}
+				currentOffset += 1;
+			}
+			else if (dataType == "D") {
+				fieldLength = 8;
+				var numAsString = attValue.toString();
+				if (numAsString.length != fieldLength) {
+					// if the length isn't what it should be then ignore and write a blank string
+					numAsString = "".lpad(" ", 8);
+				}
+				for (var writeByte=0;writeByte < fieldLength;writeByte++){
+					dbfDataView.setUint8(currentOffset,numAsString.charCodeAt(writeByte));
+					currentOffset += 1;
+					//writeByte += 1;
+				}
+			}	
+			else if (dataType == "N"){
+				// maximum length is 18. Numbers are stored as ascii text so convert to a string.
+				// fieldLength = attribinfo.length && attribinfo.length<19 ? attribinfo.length : 18;
+				var numAsString = attValue.toString();
+				if (fieldLength == 0){
+					continue;
+				}
+				if (numAsString.length != fieldLength) {
+					// if the length isn't what it should be then pad to the left
+					numAsString = numAsString.lpad(" ", fieldLength);
+				}
+				for (var writeByte=0;writeByte < fieldLength;writeByte++){
+					dbfDataView.setUint8(currentOffset,numAsString.charCodeAt(writeByte));
+					currentOffset += 1;
+					//writeByte += 1;
+				}
+			}
+			else if (dataType == "C" || dataType == ""){
+				if (fieldLength == 0) { continue; }
+				if (typeof(attValue) !== "string"){
+					// just in case a rogue number has got in...
+					attValue = attValue.toString();
+				}
+				if (attValue.length < fieldLength) {
+					attValue = attValue.rpad(" ", fieldLength);
+				}
+				// doesn't matter if it's too long as we will only write fieldLength bytes
+				for (var writeByte=0;writeByte < fieldLength;writeByte++){
+					dbfDataView.setUint8(currentOffset,attValue.charCodeAt(writeByte));
+					currentOffset += 1;
+					//writeByte += 1;
+				}
+			}
+		}
+		// row done, rinse and repeat
+	}
+	// all rows written, write EOF
+	dbfDataView.setUint8(dataLength-1,26);
+	//var dbfDataBlobObject = new WebKitBlobBuilder();
+	var dbfDataBlobObject = new BlobBuilder();
+	//dbfDataBlobObject.append(dbfDataBuf);
+	dbfDataBlobObject.append(dbfDataView.getBuffer());
 	return dbfDataBlobObject;
 }
 
@@ -662,7 +1032,7 @@ Shapefile.prototype.createAttributeMap = function(graphicsArray){
 							break;
 							case "boolean":
 								allAttributes[attribute] = {
-									type: 'L',
+									type: 'L'
 								}
 							break;
 							case "string":
