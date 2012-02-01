@@ -1,0 +1,72 @@
+<html>
+	<head>
+<script type="text/javascript" src ="FileSaver.js"></script>
+<script type="text/javascript" src="BinaryFile.js"></script>
+<script type="text/javascript" src="BuildShp_Chome.js"></script>
+<script type="text/javascript">
+	//var f = getShapefileBlob();
+	
+	function createRandomGraphics(number){
+		var graphicArray = [];
+		var xmin = 300000, ymin=300000, xmax=350000,ymax=350000;
+		for (var i = 0; i<number; i++){
+		var trueorfalse = Math.floor(((Math.random() / Math.random()) * 10) % 2) == 0;
+		var decimal = 1/(Math.pow(Math.random(),3));
+		var graphic = 
+		{	geometry: 
+			{
+			x: Math.random()*50000+xmin, 
+			y: Math.random()*50000+ymin
+			},
+			attributes:
+			{
+				ID: i,
+				text: "hello",
+				dec: decimal,
+				log: trueorfalse,
+				birthday: "19791203",
+				unknownattribute: "boo"
+			}
+		}
+		graphicArray.push(graphic);
+		}
+		return graphicArray;
+	}
+	
+	var someGraphics = createRandomGraphics(10);
+	
+	
+	var res = createShpAsBlob(someGraphics, "POINT");
+	var attributeMap = [];
+	attributeMap.push({
+		name: "ID",
+		type: "N",
+		length: 3
+	});
+	attributeMap.push({
+		name: "text",
+		type: "C",
+		length: 10
+	});
+	attributeMap.push({
+		name: "dec",
+		type: "N",
+		length: 12,
+		scale: 4
+	});
+	attributeMap.push({
+		name: "log",
+		type: "L"
+	});
+	attributeMap.push({
+		name: "birthday",
+		type: "D"
+	});
+	var dbf = createDbf(attributeMap,someGraphics);
+	saveAs(res["shape"],"test.shp");
+	saveAs(res["shx"],"test.shx");
+	saveAs(dbf,"test.dbf");
+</script>
+</head>
+<body></body>
+</html>

@@ -6,10 +6,16 @@
  * 
  * Intended as early proof of concept only, not likely to be suitable for robust use yet!
  * 
- * Relies on the HTML5 Dataview and Arraybuffer objects, implemented only in Webkit browsers
- * (Chrome) at time of writing. Should be extendible to other browsers by creating the binary data as 
- * a hex string and getting it out somehow via base64 and JSZip to remove this requirement... but I haven't figured
- * that out yet
+ * Ideally uses HTML5 Dataview and Arraybuffer objects, to create the binary data, which is then used to build
+ * Blob objects that can then be saved to disk using the FileSaver method. 
+ * However, all this is fully implemented only in Webkit browsers (Chrome) at time of writing. 
+ * Therefore to achieve greater compatibility:
+ * - jDataView_write has been created that gives DataView functionality where it isn't already available
+ * - BlobBuilder.js from eli grey has been used to give Blob functionality where it isn't available, and to give
+ *  a common name for it where it is
+ * - Downloadify flash library has been used in conjunction with JSZip to enable saving of the created binary 
+ * data in browsers where saving from JS either isn't available at all (IE) or results in unmanageable filenames 
+ * (Firefox).
  * 
  * Usage: 
  * var shapemaker = new Shapefile({

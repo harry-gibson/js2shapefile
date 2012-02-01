@@ -1,3 +1,7 @@
+// FileSaver.js is for Chrome
+// JSZip
+// Downloadify
+
 /* FileSaver.js
  * A saveAs() FileSaver implementation.
  * 2011-08-02

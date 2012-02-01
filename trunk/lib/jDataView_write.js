@@ -1,55 +1,88 @@
+// A prototype implementation of (parts of) the HTML5 DataView specification available at 
+// http://www.khronos.org/registry/typedarray/specs/latest/#8
+// Provides a way to _create_ "binary" data in browsers that do not have DataView (currently only Chrome does).
+// Based on jsDataView at https://github.com/gmarty/jsDataView
+// which is read only. This is write only. Maybe someone ought to combine them...
+// Data are created as an ArrayBuffer if available and a JS array of ints if not.
+// Use the createEmptyBuffer(length) method to create a buffer of the best available type first,
+// then pass this to the constructor: 
+// var buf = jDataView_write.createEmptyBuffer(100); 
+// var vw = new jDataView_write(buf);
+// The byteOffset and byteLength parameters are not used yet; the view will be of the whole buffer
+// Retrieve the buffer using vw.getBuffer(), this will return either an ArrayBuffer or 
+// a binary string where each character's code represents the associated value
+// Either are suitable for appending to BlobBuilder (implemented by eli grey, code below) 	
+//var jDataView_write = jDataView_write ||
+//self.DataView ||
+(function(){
 var compatibility = {
-	ArrayBuffer: typeof ArrayBuffer !== 'undefined',
-	DataView: typeof DataView !== 'undefined' && 'getFloat64' in DataView.prototype
+		ArrayBuffer: typeof ArrayBuffer !== 'undefined',
+		DataView: typeof DataView !== 'undefined' && 'getFloat64' in DataView.prototype
 };
-
-var jDataView_write = function(buffer,byteLength,debug){
-	this._buffer = buffer;
-	if (!(compatibility.ArrayBuffer && buffer instanceof ArrayBuffer) &&
-		!(buffer instanceof Array)){
+var jDataView_write = function(buffer,byteOffset,byteLength,debug){
+		this._buffer = buffer;
+		if (!(compatibility.ArrayBuffer && buffer instanceof ArrayBuffer) &&
+			!(buffer instanceof Array)){
 			throw new TypeError('Type Error');
-	}
-	this._isArrayBuffer = compatibility.ArrayBuffer && buffer instanceof ArrayBuffer;
-	// FORCE STRING TYPES FOR TESTING
-	//if(this._isDataView)this._isDataView = !forceBasicView;
-	//if(this._isArrayBuffer)this._isArrayBuffer = !forceBasicBuffer;
-	this._log = debug;
-	this._isDataView = compatibility.DataView && this._isArrayBuffer;
-	// Defauly endian-ness - not implementing for now as per standard DataView, use methods to set each time
-	this._littleEndian = false; 
-	var bufferLength = this._isArrayBuffer ? buffer.byteLength : buffer.length;
-	//  Start offset of view relative to its buffer - not implementing for now for now, work with view = same length as buffer
-	var byteOffset=0;
-	if (byteLength == undefined){
-		byteLength = bufferLength - byteOffset; // == bufferLength until byteOffset implemented
-	}
-	if (!this._isDataView){
+		}
+		this._isArrayBuffer = compatibility.ArrayBuffer && buffer instanceof ArrayBuffer;
+		// FOR TESTING - log things to console
+		this._log = debug;
+		// we should never be here because this whole thing only comes into being if window.DataView doesn't exist
+		this._isDataView = compatibility.DataView && this._isArrayBuffer;
+		// Default endian-ness for get/set methods - this has been added in jDataView but I am 
+		// not implementing for now (as per standard DataView), use methods to set required value each time
+		this._littleEndian = false; 
+		var bufferLength = this._isArrayBuffer ? buffer.byteLength : buffer.length;
+		// Start offset of view relative to its buffer - not implementing for now, will force 
+		// view length = buffer length 
+		var byteOffset=0;
+		if (byteLength == undefined){ // which it is, until we implement it
+			byteLength = bufferLength - byteOffset; // == bufferLength until byteOffset implemented
+		}
+		if (!this._isDataView){
 		// Do additional checks to simulate DataView
-		if (typeof byteOffset !== 'number') {
-			throw new TypeError('Type error');
+			if (typeof byteOffset !== 'number') {
+				throw new TypeError('Type error');
+			}
+			if (typeof byteLength !== 'number') {
+				throw new TypeError('Type error');
+			}
+			if (typeof byteOffset < 0) {
+				throw new Error('INDEX_SIZE_ERR: DOM Exception 1');
+			}
+			if (typeof byteLength < 0) {
+				throw new Error('INDEX_SIZE_ERR: DOM Exception 1');
+			}
 		}
-		if (typeof byteLength !== 'number') {
-			throw new TypeError('Type error');
+		if (this._isDataView) {
+			this._view = new DataView(buffer, byteOffset, byteLength);
+			this._start = 0;
 		}
-		if (typeof byteOffset < 0) {
+		this._start = byteOffset; // not using offset tracking stuff, just doing basic dataview
+		if (byteOffset >= bufferLength) {
 			throw new Error('INDEX_SIZE_ERR: DOM Exception 1');
 		}
-		if (typeof byteLength < 0) {
-			throw new Error('INDEX_SIZE_ERR: DOM Exception 1');
+		this._offset = 0; // not using offset tracking stuff, just doing basic dataview
+		this.length = byteLength;
+	};
+	
+jDataView_write.createBuffer = function(){
+	// left this in from jsDataView but not used - string array buffer type needs zero filling
+	if (typeof ArrayBuffer !== 'undefined') {
+		var buffer = new ArrayBuffer(arguments.length);
+		var view = new Int8Array(buffer);
+		for (var i = 0; i < arguments.length; ++i) {
+			view[i] = arguments[i];
 		}
+		return buffer;
 	}
-	if (this._isDataView) {
-		this._view = new DataView(buffer, byteOffset, byteLength);
-		this._start = 0;
-	}
-	this._start = byteOffset; // not using offset tracking stuff, just doing basic dataview
-	if (byteOffset >= bufferLength) {
-		throw new Error('INDEX_SIZE_ERR: DOM Exception 1');
-	}
-	this._offset = 0; // not using offset tracking stuff, just doing basic dataview
-	this.length = byteLength;
-};
+	return String.fromCharCode.apply(null, arguments);
+}
 jDataView_write.createEmptyBuffer = function(length,forceString){
+	// temporary replacement for createBuffer. If ArrayBuffer isn't available (or forceString is 
+	// set true, for debugging in a browser that does have ArrayBuffer), it creates 
+	// a normal array containing zero at each position
 	if (typeof ArrayBuffer !== 'undefined' && !forceString){
 		var buffer = new ArrayBuffer(length);
 		return buffer;	
@@ -61,22 +94,14 @@ jDataView_write.createEmptyBuffer = function(length,forceString){
 	}
 	return buffer;
 }
-jDataView_write.createBuffer = function() {
-	if (typeof ArrayBuffer !== 'undefined') {
-		var buffer = new ArrayBuffer(arguments.length);
-		var view = new Int8Array(buffer);
-		for (var i = 0; i < arguments.length; ++i) {
-			view[i] = arguments[i];
-		}
-		return buffer;
-	}
-	return String.fromCharCode.apply(null, arguments);
-};
-
-jDataView_write.prototype.setUint8 = function(offset,value){
+var JDV_proto = jDataView_write.prototype;
+JDV_proto.setUint8 = function(offset,value){
 	// the fundamental method for setting a value, writing a single unsigned byte to the buffer 
 	if (this._isArrayBuffer){
-		this._buffer.setUint8(offset,value);
+		// if arraybuffer available then so is Uint8 typed array
+		// need to rewrite other methods to do the same by iterating over the bytes of hte input value
+		// and setting into a Uint32Array etc, rather than making a new Uint8Array for each byte... 
+		(new Uint8Array(this._buffer,offset,1))[0] = value;
 	}
 	else {
 		//this._buffer[offset] = String.fromCharCode(value&0xff)
@@ -85,7 +110,7 @@ jDataView_write.prototype.setUint8 = function(offset,value){
 		else this._buffer[offset]=value;
 	}
 }
-jDataView_write.prototype.setInt8 = function(offset,value){
+JDV_proto.setInt8 = function(offset,value){
 	if (value < 0){
 		this.setUint8(offset,Math.pow(2,8)+value) // -1 will be stored as 255, -128 as 128, 
 	}
@@ -93,7 +118,7 @@ jDataView_write.prototype.setInt8 = function(offset,value){
 		this.setUint8(offset,value);
 	}
 }
-jDataView_write.prototype.setUint16 = function(offset,value,littleEndian){
+JDV_proto.setUint16 = function(offset,value,littleEndian){
 	if (this._isDataView) {
 		// use the native dataview methods directly if they're available
 		this._view.setUint16(offset, value, littleEndian);
@@ -105,7 +130,7 @@ jDataView_write.prototype.setUint16 = function(offset,value,littleEndian){
 		this.setUint8(this._getOffsetOfByte(offset, 1, 2, littleEndian), byte1);
 	}
 }
-jDataView_write.prototype.setInt16 = function(offset,value,littleEndian){
+JDV_proto.setInt16 = function(offset,value,littleEndian){
 	if (this._isDataView) {
 		this._view.setInt16(offset,value,littleEndian);
 		return;
@@ -118,7 +143,7 @@ jDataView_write.prototype.setInt16 = function(offset,value,littleEndian){
 		this.setUint16(offset,value,littleEndian);
 	}
 }
-jDataView_write.prototype.setUint32 = function(offset,value,littleEndian){
+JDV_proto.setUint32 = function(offset,value,littleEndian){
 	if (this._isDataView){
 		this._view.setUint32(offset,value,littleEndian);
 		return;
@@ -132,7 +157,7 @@ jDataView_write.prototype.setUint32 = function(offset,value,littleEndian){
 	this.setUint8 (this._getOffsetOfByte(offset,2,4,littleEndian),byte1);
 	this.setUint8(this._getOffsetOfByte(offset,3,4,littleEndian),byte0);
 }
-jDataView_write.prototype.setInt32 = function(offset,value,littleEndian){
+JDV_proto.setInt32 = function(offset,value,littleEndian){
 	if (this._isDataView){
 		this._view.setInt32(offset,value,littleEndian);
 		return;
@@ -151,47 +176,50 @@ jDataView_write.prototype.setInt32 = function(offset,value,littleEndian){
 		this.setUint8(offsetOfByte,val);
 	}
 }
-jDataView_write.prototype.setFloat32 = function(offset,value,littleEndian){
+JDV_proto.setFloat32 = function(offset,value,littleEndian){
 	if (this._isDataView){
 		this._view.setFloat32(offset,value,littleEndian);
 		return;
 	}
-	// see wiki single precision floating point format
-	// 32 bits / 4 bytes
+	// now it gets tricky. single precision floating point format consists of:
+	// 32 bits / 4 bytes where
 	// bit 31 = sign
-	// bits 30-23 = exponent (8 bits)
+	// bits 30-23 = exponent
 	// bits 22 - 0 = fraction
+	// luckily someone else has already written a method for doing it 
+	// which I have included as _encodeFloat...
 	var bytesArray = this._encodeFloat(value,23,8);
 	if (!littleEndian){bytesArray.reverse();}
 	for (var bytenum=0;bytenum<bytesArray.length;bytenum+=1){
 		this.setUint8(this._getOffsetOfByte(offset,bytenum,8,littleEndian),bytesArray[bytenum]);
 	}	
 }
-jDataView_write.prototype.setFloat64 = function(offset,value,littleEndian){
+JDV_proto.setFloat64 = function(offset,value,littleEndian){
 	if (this._isDataView){
 		this._view.setFloat64(offset,value,littleEndian);
 		return;
 	}
-	// 64 bits / 8 bytes
+	// 64 bits / 8 bytes, where 
 	// bit 63 = sign, 0=positive, 1=non-positive
 	// bits 62 - 62 = exponent (ll bits)
 	// bits 51 - 0 = fraction (52 bits)
-	var bytesArray = this._encodeFloat(value,52,11);
+	var bytesArray = this._encodeFloat(value,52,11); // method always returns in littleEndian order
 	if (!littleEndian){bytesArray.reverse();}
+	// debug setting
 	if (this._log)console.log("About to set float64 value of "+value) 
-	
 	for (var bytenum=0;bytenum<bytesArray.length;bytenum+=1){
 		//var offsetOfByte = this._getOffsetOfByte(offset,bytenum,8,littleEndian);
 		// the array is in the right order for the required endian-ness so don't need to calculate the 
 		// byte offset by working backwards
 		var offsetOfByte = offset+bytenum; 
 		var val = bytesArray[bytenum];
+		// debug setting
 		if (this._log)console.log("LE: "+littleEndian+" setting byte "+bytenum+" of float64 to "+val+" or hex "+val.toString(16)+" at "+offsetOfByte);
 		this.setUint8(offsetOfByte,val);
 		//this.setUint8(this._getOffsetOfByte(offset,bytenum,8,littleEndian),bytesArray[bytenum]);
 	}
 }
-jDataView_write.prototype.getBuffer = function(){
+JDV_proto.getBuffer = function(){
 	if (this._isArrayBuffer) {
 		return this._buffer;
 	}
@@ -200,8 +228,7 @@ jDataView_write.prototype.getBuffer = function(){
 		if (this._buffer.map) {
 			stringBuf=this._buffer.map(function(x){
 				return String.fromCharCode(x & 0xff);
-			//return "\\u"+x.toString(16);
-			//return "\x" + (x.toString(16).length == 1 ? "0" + x.toString(16) : x.toString(16))
+				//return "\x" + (x.toString(16).length == 1 ? "0" + x.toString(16) : x.toString(16))
 			});
 		}
 		else { // no array map function in IE
@@ -212,23 +239,28 @@ jDataView_write.prototype.getBuffer = function(){
 		}
 		var binaryString = stringBuf.join("");
 		//var output = unescape(encodeURIComponent(binaryString));
-		//return output;
+		//no, we'll let the caller deal with encoding if needed, not our problem here
 		return binaryString;
 	}
 }
+
 // UTILITY FUNCTIONS
-jDataView_write.prototype._getOffsetOfByte = function(offset,pos,max,littleEndian){
+JDV_proto._getOffsetOfByte = function(offset,pos,max,littleEndian){
+	// left in for posterity as it's used in the original jDataview class however we're not using it
 	// offset = the start byte of the number
 	// pos = the byte within this number
 	// max = the length of the value we're working with in bytes
 	// littleEndian - whether we need to work right to left or not
 	return offset + (littleEndian? max - pos - 1 : pos);
 }
-jDataView_write.prototype._encodeFloat = function(value,precisionBits,exponentBits){
-	// function taken from binary parser by Jonas Raoni Soares Silva at 
-	// http://jsfromhell.com/classes/binary-parser, return object modified slightly
-	// returns float value as an array of length (precisionbits+exponentbits+1)/8, each member being 
-	// the int value of that byte, ordered in little-endian order
+JDV_proto._encodeFloat = function(value,precisionBits,exponentBits){
+	// This function taken from binary parser by Jonas Raoni Soares Silva at 
+	// http://jsfromhell.com/classes/binary-parser, with return object modified slightly to return 
+	// array of ints rather than string
+	// Returns float value as an array of length (precisionbits+exponentbits+1)/8, each member being 
+	// the int value of that byte, ordered in little-endian order. 
+	// See also "pack" at http://phpjs.org/functions/pack:880
+	// and jspack at http://code.google.com/p/jspack/source/browse/
 	var bias = Math.pow(2,exponentBits-1)-1;
 	var minExp = -bias+1;
 	var maxExp = bias;
@@ -268,7 +300,7 @@ jDataView_write.prototype._encodeFloat = function(value,precisionBits,exponentBi
 	//r[r.length] = n ? String.fromCharCode(n) : "";
 	return r; // array of bytes in little-endian order, reverse in caller if necessary		
 }
-jDataView_write.prototype._encodeInt = function(number,bits,signed){
+JDV_proto._encodeInt = function(number,bits,signed){
 	// function taken from binary parser by Jonas Raoni Soares Silva at 
 	// http://jsfromhell.com/classes/binary-parser
 	var max = Math.pow(2, bits), r = [];
@@ -281,58 +313,10 @@ jDataView_write.prototype._encodeInt = function(number,bits,signed){
 	for(bits = -(-bits >> 3) - r.length; bits--; r[r.length] = "\0");
 	return r; // array of bytes in little-endian order, reverse in caller if necessary
 }
-jDataView_write.prototype.stringToUtf8 = function (string) {
-	//string = string.replace(/\r\n/g,"\n");
-	var utftext = "";
 
-	for (var n = 0; n < string.length; n++) {
-
-		var c = string.charCodeAt(n);
-
-		if (c < 128) {
-			utftext += String.fromCharCode(c);
-		}
-		else if((c > 127) && (c < 2048)) {
-			utftext += String.fromCharCode((c >> 6) | 192);
-			utftext += String.fromCharCode((c & 63) | 128);
-		}
-		else {
-			utftext += String.fromCharCode((c >> 12) | 224);
-			utftext += String.fromCharCode(((c >> 6) & 63) | 128);
-			utftext += String.fromCharCode((c & 63) | 128);
-		}
-	}
-	return utftext;
-}
-jDataView_write.prototype.utf8ToString = function (utftext) {
-	var string = "";
-	var i = 0;
-	var c = c1 = c2 = 0;
-
-	while ( i < utftext.length ) {
-
-		c = utftext.charCodeAt(i);
-
-		if (c < 128) {
-			string += String.fromCharCode(c);
-			i++;
-		}
-		else if((c > 191) && (c < 224)) {
-			c2 = utftext.charCodeAt(i+1);
-			string += String.fromCharCode(((c & 31) << 6) | (c2 & 63));
-			i += 2;
-		}
-		else {
-			c2 = utftext.charCodeAt(i+1);
-			c3 = utftext.charCodeAt(i+2);
-			string += String.fromCharCode(((c & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
-			i += 3;
-		}
-
-	}
-
-	return string;
-}
+self.jDataView_write = jDataView_write;
+})();
+	
 /* BlobBuilder.js
  * A BlobBuilder implementation.
  * 2011-07-13
@@ -348,10 +332,7 @@ jDataView_write.prototype.utf8ToString = function (utftext) {
 
 /*! @source http://purl.eligrey.com/github/BlobBuilder.js/blob/master/BlobBuilder.js */
 
-var BlobBuilder = BlobBuilder 
-//|| self.WebKitBlobBuilder 
-//|| self.MozBlobBuilder 
-||
+var BlobBuilder =  BlobBuilder || self.WebKitBlobBuilder || //self.MozBlobBuilder ||
 (function(view) {
 "use strict";
 var
@@ -449,6 +430,7 @@ FBB_proto.append = function(data/*, endings*/) {
 				str += String.fromCharCode(buf[i]);
 			}
 		}
+		// what about bb.push?? missing
 	} else if (get_class(data) === "Blob" || get_class(data) === "File") {
 		if (FileReaderSync) {
 			var fr = new FileReaderSync;
@@ -470,6 +452,7 @@ FBB_proto.append = function(data/*, endings*/) {
 			data += ""; // convert unsupported types to strings
 		}
 		// decode UTF-16 to binary string
+		// cancelled this ... 
 		//bb.push(unescape(encodeURIComponent(data)));
 		bb.push(data);
 	}
@@ -570,3 +553,5 @@ return FakeBlobBuilder;
          return output;
 
       }
+
+

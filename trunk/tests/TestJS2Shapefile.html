@@ -1,0 +1,64 @@
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html;charset=x-user-defined">
+<script type="text/javascript" src ="../lib/FileSaveTools.js"></script>
+<script type="text/javascript" src="../lib/jDataView_write.js"></script>
+<script type="text/javascript" src="../src/JS2Shapefile.js"></script>
+<script type="text/javascript" src="../lib/jszip.js"></script>
+<script type="text/javascript" src="../lib/downloadify/js/swfobject.js"></script>
+<script type="text/javascript" src="../lib/downloadify/js/downloadify.js"></script>
+<script type="text/javascript">
+	
+	function createRandomGraphics(number){
+		var graphicArray = [];
+		var xmin = 300000, ymin=300000, xmax=350000,ymax=350000;
+		for (var i = 0; i<number; i++){
+		var trueorfalse = Math.floor(((Math.random() / Math.random()) * 10) % 2) == 0;
+		var decimal = 1/(Math.pow(Math.random(),3));
+		//var east = Math.random()*50000+xmin;
+		//var north =  Math.random()*50000+ymin;
+			
+		var graphic = 
+		{	geometry: 
+			{
+			x: Math.random()*50000+xmin, 
+			y: Math.random()*50000+ymin,
+			type: "point"
+			},
+			attributes:
+			{
+				ID: i,
+				text: "hello",
+				dec: decimal,
+				log: trueorfalse,
+				birthday: "19791203",
+				unknownattribute: "boo"
+			}
+		}
+		graphicArray.push(graphic);
+		}
+		return graphicArray;
+	}
+	
+	function testPointShape(){
+        var someGraphics = createRandomGraphics(10);
+        var shapewriter = new Shapefile();
+		shapewriter.addESRIGraphics(someGraphics);
+		var res = shapewriter.getShapefile("POINT");
+		if (res.successful) {
+			console.debug("Shapefile created, sending to FileSaver");
+			var saver = new FileSaver();
+			saver.addData(res["shapefile"], "testsaver.");
+			var btn = saver.createSaveControl();
+			document.body.appendChild(btn);
+		}
+		else {
+			console.error("Error generating shapefile");
+		}
+	}
+	
+</script>
+</head>
+<body><div id = "testbit"><input type="button" value="Create random point shapefile" onclick="testPointShape()"></div>
+</body>
+</html>
