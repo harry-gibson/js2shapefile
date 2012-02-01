@@ -6,7 +6,7 @@
 <script type="text/javascript" src="../src/JSShapefile_Generic.js"></script>
 <script type="text/javascript" src="../lib/jszip.js"></script>
 <script type="text/javascript" src="../lib/downloadify/js/swfobject.js"></script>
-<script type="text/javascript" src="../lib/downloadify/js/downloadify.min.js"></script>
+<script type="text/javascript" src="../lib/downloadify/js/downloadify.js"></script>
 <script type="text/javascript">
 	//var f = getShapefileBlob();
 	
@@ -72,20 +72,52 @@
 		//return encodeBase64(res["shape"].data);
 	}
 	function load(){
+		var flashVars = {
+			downloadImage:"../lib/downloadify/images/blank.png",
+			height:150,
+			width:150,
+			queue_name:"blah"
+		};
+		var params = {
+			scale: "exactFit"
+		};
+		var attributes = {
+			id: "dlFlash",
+			name: "dlFlash"
+		};
+		/*swfobject.embedSWF("../lib/downloadify/media/downloadify.swf",
+			"dlFlash",
+			"100%",
+			"100%",
+			"10",
+			null,
+			flashVars,
+			params,
+			attributes);*/
 		Downloadify.create('saveBtn', {
 			swf: '../lib/downloadify/media/downloadify.swf',
-			downloadImage: '../lib/downloadify/images/download.png',
-			width: 175,
-			height: 30,
+			downloadImage: '../lib/downloadify/images/download_nativelook.png',
 			filename: "test_shapezip.zip",
-			data: function(){
-				return testPointShape_SWF();
-			},
-			dataType: 'base64',
-			append: true
+			width:96,
+			height:22,
+			data: "hello here is some data",
+			dataType: 'string',
+			append: true,
+			transparent: true
 		});
 	}
+	/*function(){
+				return testPointShape_SWF();
+			}*/
 </script>
 </head>
-<body onload="load();"><p id='saveBtn'>DL button here</p></body>
+<body onload="load();">
+<div id="saveStuff" style="height:30px;width:80px;background-image:../lib/downloadify/images/btn.png">	
+
+<div style="position:absolute;left:0px;top:0px" id="saveBtn" ></div>
+<div style="position:absolute;left:0px;top:0px;" ><input type="button" value="Save fesults"></div>
+
+<!--<div style="position:absolute;left:0px;top:0px;"> Click to save! </div>-->
+</div>
+</body>
 </html>
