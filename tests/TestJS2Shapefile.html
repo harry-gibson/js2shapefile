@@ -46,11 +46,10 @@
 		shapewriter.addESRIGraphics(someGraphics);
 		var res = shapewriter.getShapefile("POINT");
 		if (res.successful) {
-			console.debug("Shapefile created, sending to FileSaver");
-			var saver = new FileSaver();
+			//console.debug("Shapefile created, sending to FileSaver");
+			var saver = new BinaryHelper();
 			saver.addData(res["shapefile"], "testsaver.");
-			var btn = saver.createSaveControl();
-			document.body.appendChild(btn);
+			var btn = saver.createSaveControl("saveButtonDiv");
 		}
 		else {
 			console.error("Error generating shapefile");
@@ -59,6 +58,14 @@
 	
 </script>
 </head>
-<body><div id = "testbit"><input type="button" value="Create random point shapefile" onclick="testPointShape()"></div>
+<body>
+	<div id = "testbit">
+		Click to generate a random shapefile
+		<input type="button" value="Create random point shapefile" onclick="testPointShape()">
+	</div>
+	<div id = "saveButtonDiv">
+		Save control will appear here...
+	</div>
+
 </body>
 </html>

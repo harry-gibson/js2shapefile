@@ -47,6 +47,18 @@ var Shapefile = (function(){
 	        return -1;
 	    }
 	}
+	// function binding method in case it's a clapped out old version of JS
+	// http://stackoverflow.com/questions/2025789/preserving-a-reference-to-this-in-javascript-prototype-functions
+	if (!Function.prototype.bind){
+		Function.prototype.bind = function(){
+			var fn = this, 
+				args=Array.prototype.slice.call(arguments),
+				object = args.shift();
+			return function(){
+				return fn.apply(object,args.concat(Array.prototype.slice.call(arguments)));
+			};
+		};
+	};
 
 	
 	ShapeMaker.prototype = (function(){
@@ -154,9 +166,10 @@ var Shapefile = (function(){
 				message: "No graphics of type " + shapetype + " have been added!"
 			};
 		}
+		//var resultObject = _createShapeShxFile.apply(this,[shapetype,arrayToUse]);
 		var resultObject = _createShapeShxFile(shapetype,arrayToUse);
-		var attributeMap = _createAttributeMap(arrayToUse);
-		resultObject["dbf"] = _createDbf(attributeMap, arrayToUse);
+		var attributeMap = _createAttributeMap.apply(this,[arrayToUse]);
+		resultObject["dbf"] = _createDbf.apply(this,[attributeMap, arrayToUse]);
 		return {
 			successful: true,
 			shapefile: {
@@ -325,11 +338,11 @@ var Shapefile = (function(){
 					}
 					//now featureRecordInfo and pointsArrayBuf together contain the complete feature
 					// now do the shx record
-					var shxBuffer = new ArrayBuffer(8);
-					var shxDataView = new DataView(shxBuffer);
+					var shxBuffer = jDataView_write.createEmptyBuffer(8);
+					var shxDataView = new jDataView_write(shxBuffer);
 					shxDataView.setInt32(0, byteFileLength / 2);
 					shxDataView.setInt32(4, byteLengthOfRecordContent / 2);
-					shapeContentBlobObject.append(shapeRecordInfoView.getBuffer());
+					shapeContentBlobObject.append(shpRecordInfoView.getBuffer());
 					shapeContentBlobObject.append(pointsArrayView.getBuffer());
 					shxContentBlobObject.append(shxDataView.getBuffer());
 					if (feat_xmax > ext_xmax) 
@@ -704,10 +717,18 @@ var Shapefile = (function(){
 	}
 	return {
 		constructor: ShapeMaker,
-		addESRIGraphics:addESRIGraphics,
-		addGoogleGraphics:addGoogleGraphics,
-		addOLGraphics:addOLGraphics,
-		getShapefile:getShapefile
+		addESRIGraphics: function(){
+			return addESRIGraphics.call(this,arguments[0])
+		},
+		addGoogleGraphics: function(){
+			return addGoogleGraphics.call(this,arguments[0]);
+		},
+		addOLGraphics:function(){
+			return addOLGraphics.call(this,arguments[0]);
+		},
+		getShapefile: function(){
+			return getShapefile.call(this,arguments[0]);
+		}
 	}
 	})();
 	return ShapeMaker;
