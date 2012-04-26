@@ -1,23 +1,49 @@
-/*function demoShapefile()  {
-	this.publicthing = value;
-	var privatething = value2;
-	function privatefunc() {};
-	var anotherprivatefunc = function(){};
-	this.privilegedfunction = function(){}//can access private members and also be called publically
-} 
-demoShapefile.prototype.doThing = publicfunction;
-  function object(o) {
-        function F() {}
-        F.prototype = o;
-        return new F();
-    }*/
+/** 
+ * JS2Shapefile - A javascript class for generating ESRI shapefiles in the client from a variety of javascript map
+ * API vector formats (ESRI Graphic, Google Maps, Openlayers (TODO)
+ * 
+ * (c) 2012-02-09 Harry Gibson 
+ * 
+ * Intended as early proof of concept only, not likely to be suitable for robust use yet!
+ * 
+ * Requires and uses the jDataView_write implementation of DataView to enable use in browsers where DataView and / or Arraybuffer
+ * aren't available. 
+ * Requires and uses BlobBuilder polyfill class to ensure that Blobs created are suitable for use in the saving
+ * method that is available (see BinaryHelper).
+ * Both of these classes must be loaded before the getShapefile function is called.
+ * 
+ * Usage: 
+ * var shapemaker = new Shapefile();
+ * shapemaker.addESRIGraphics(ArrayOfEsriGraphics);
+ *  // graphics can be a mix of points, lines, polygons. E.g. use the graphics of an ESRI Graphics Layer
+ *  // each shapefile will include a unioned set of the graphics' attributes (hopefully)
+ * 
+ * shapemaker.addGoogleGraphics(ArrayOfGoogleGraphics);
+ * // graphics are an array of google maps Markers, Polylines, and Polygons. No attribute handling implemented
+ * 
+ * shapemaker.addOLGraphics(ArrayOfOpenlayersGraphics); // not implemented yet
+ * 
+ * var pointfile = shapemaker.getShapefile("POINT");  // output shapefile will use point graphics only 
+ * var linefile = shapemaker.getShapefile("POLYLINE");// output shapefile will use the polyline graphics only 
+ * var polygonfile = shapemaker.getShapefile("POLYGON");
+ * 
+ *  // the returned objects have structure e.g.
+ *  pointfile = {
+ *  	successful : true | false,
+ *  	shapefile: {
+ *  		shp:	BlobBuilder,
+ *  		shx:	BlobBuilder,
+ *  		dbf:	BlobBuilder
+ *  	}
+ *  }
+ *  The blobs can be saved to disk using BinaryHelper
+ * 
+ * No awareness of projection / CRS is implemented. Output shapefile will contain coordinates in the form they were
+ * in the input graphics. (The CRS of the ESRI map, or WGS84 lat/lon for google graphics). This could easily be
+ * improved using proj4js or similar
+ */
 var Shapefile = (function(){
-	var ShapeMaker = function(){
-		this._pointgraphics = [];
-		this._polylinegraphics = [];
-		this._polygongraphics = [];
-		
-	};
+	// some compatibility bits
 	//pad strings on the left
 	if (!"".lpad) {
 		String.prototype.lpad = function(padString, length){
@@ -47,20 +73,15 @@ var Shapefile = (function(){
 	        return -1;
 	    }
 	}
-	// function binding method in case it's a clapped out old version of JS
-	// http://stackoverflow.com/questions/2025789/preserving-a-reference-to-this-in-javascript-prototype-functions
-	if (!Function.prototype.bind){
-		Function.prototype.bind = function(){
-			var fn = this, 
-				args=Array.prototype.slice.call(arguments),
-				object = args.shift();
-			return function(){
-				return fn.apply(object,args.concat(Array.prototype.slice.call(arguments)));
-			};
-		};
+	// the main constructor function to be returned
+	var ShapeMaker = function(){
+		this._pointgraphics = [];
+		this._polylinegraphics = [];
+		this._polygongraphics = [];
 	};
-
-	
+	// define everything else as private variables on the prototype function of ShapeMaker. 
+	// Then set return of prototype function to be an object containing
+	// only the "public" functions, bound within a function to give them correct scope. 
 	ShapeMaker.prototype = (function(){
 	
 	var ShapeTypes = {
@@ -68,7 +89,9 @@ var Shapefile = (function(){
 		"POLYLINE":3,
 		"POLYGON":5
 	}
-
+// DECLARE FUNCTIONS THAT WILL BE EXPOSED THROUGH PROTOTYPE 
+	// Load ESRI JSAPI graphics, takes an arbitrary array of them (e.g. map.graphicslayer.graphics) 
+	// and places them in the right arrays
 	var addESRIGraphics = function(esrigraphics){
 		for (var i = 0; i < esrigraphics.length; i++) {
 			var thisgraphic = esrigraphics[i];
@@ -87,17 +110,17 @@ var Shapefile = (function(){
 			}
 		}
 	}
+	// TO DO!
+	// "translate" the openlayers graphics item to something compatible with the esri format before adding
 	var addOLGraphics = function(openlayersgraphics){
-		// TO DO!
-		// "translate" the openlayers graphics item to something compatible with the esri format before adding
 		for (var i = 0; i < openlayersgraphics.length; i++) {
 			var quasiEsriGraphic = {
 				geometry: {}
 			}
 		}
 	}
+	// "translate" the gmapsgraphics to something that quacks like an esri graphic before adding
 	var addGoogleGraphics = function(googlegraphics){
-		// "translate" the gmapsgraphics to something compatible with the esri format before adding
 		for (var i = 0; i < googlegraphics.length; i++) {
 			var quasiEsriGraphic = {
 				geometry: {}
@@ -108,7 +131,7 @@ var Shapefile = (function(){
 				quasiEsriGraphic.geometry.x = thisgraphic.getPosition().lng();
 				quasiEsriGraphic.geometry.y = thisgraphic.getPosition().lat();
 				quasiEsriGraphic.geometry.type = "POINT";
-				this.pointgraphics.push(quasiEsriGraphic);
+				this._pointgraphics.push(quasiEsriGraphic);
 			}
 			else 
 				if (thisgraphic.getPaths) {
@@ -128,7 +151,7 @@ var Shapefile = (function(){
 						quasiEsriGraphic.geometry.rings.push(ringArray);
 					}
 					quasiEsriGraphic.geometry.type = "POLYGON";
-					this.polygongraphics.push(quasiEsriGraphic);
+					this._polygongraphics.push(quasiEsriGraphic);
 				}
 				else 
 					if (thisgraphic.getPath) {
@@ -144,7 +167,7 @@ var Shapefile = (function(){
 							quasiEsriGraphic.geometry.paths[0].push([vertex.lng(), vertex.lat()]);
 						}
 						quasiEsriGraphic.geometry.type = "POLYLINE";
-						this.polylinegraphics.push(quasiEsriGraphic);
+						this._polylinegraphics.push(quasiEsriGraphic);
 					}
 		}
 	}
@@ -179,6 +202,8 @@ var Shapefile = (function(){
 			}
 		};
 	}
+// DECLARE FUCNTIONS THAT WILL BE PRIVATE (NOT EXPOSED THROUGH PROTOTYPE)
+	// this is where the shapefile goodness happens
 	var _createShapeShxFile = function(shapetype, graphics){
 		// use the jDataView_write convenience method to create whatever kind of buffer is supported in browser
 		var shpHeaderBuf = jDataView_write.createEmptyBuffer(100);
@@ -363,7 +388,7 @@ var Shapefile = (function(){
 					message: "unknown shape type specified"
 				});
 		}
-		// end of switch statement. build the rest of the file headers as we know the file extent and length
+		// end of switch statement. build the rest of the file headers as we now know the file extent and length
 		// set extent in shp and shx headers, little endian
 		shpHeaderView.setFloat64(36, ext_xmin, true);
 		shpHeaderView.setFloat64(44, ext_ymin, true);
@@ -390,8 +415,8 @@ var Shapefile = (function(){
 			shape: shapeFileBlobObject.getBlob(),
 			shx: shxFileBlobObject.getBlob()
 		}
-		
 	}
+	// DBF created by two separate functions for header and content. This function combines them
 	var _createDbf = function(attributeMap, graphics){
 		if (attributeMap.length == 0) {
 			attributeMap.push({
@@ -456,7 +481,7 @@ var Shapefile = (function(){
 			var datatype = attributeMap[i].type || "C"
 			var fieldLength;
 			if (datatype == "L") {
-				fieldLength = 1;
+				fieldLength = 1; // not convinced this datatype is right, doesn't show as boolean in GIS
 			}
 			else 
 				if (datatype == "D") {
@@ -589,7 +614,6 @@ var Shapefile = (function(){
 						for (var writeByte = 0; writeByte < fieldLength; writeByte++) {
 							dbfDataView.setUint8(currentOffset, numAsString.charCodeAt(writeByte));
 							currentOffset += 1;
-						//writeByte += 1;
 						}
 					}
 					else 
@@ -607,7 +631,6 @@ var Shapefile = (function(){
 							for (var writeByte = 0; writeByte < fieldLength; writeByte++) {
 								dbfDataView.setUint8(currentOffset, numAsString.charCodeAt(writeByte));
 								currentOffset += 1;
-							//writeByte += 1;
 							}
 						}
 						else 
@@ -626,7 +649,6 @@ var Shapefile = (function(){
 								for (var writeByte = 0; writeByte < fieldLength; writeByte++) {
 									dbfDataView.setUint8(currentOffset, attValue.charCodeAt(writeByte));
 									currentOffset += 1;
-								//writeByte += 1;
 								}
 							}
 			}
@@ -715,6 +737,9 @@ var Shapefile = (function(){
 		}
 		return attributeMap;
 	}
+// DEFINE THE OBJECT THAT WILL REPRESENT THE PROTOTYPE
+	// all functions defined, now return as the prototype an object giving access to the ones we want
+	// to be public
 	return {
 		constructor: ShapeMaker,
 		addESRIGraphics: function(){
@@ -730,7 +755,10 @@ var Shapefile = (function(){
 			return getShapefile.call(this,arguments[0]);
 		}
 	}
+	// execute the prototype definition immediately
 	})();
+	// return the ShapeMaker object  
 	return ShapeMaker;
+// execute the whole lot so that ShapeFile is available in the global space	
 })();
 
