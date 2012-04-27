@@ -50,18 +50,19 @@ body {
 }
 </style>
 
-<script type="text/javascript" src="../lib/mapToolbar.js">
+<script type="text/javascript" src="js/mapToolbar.js">
 /* Gmaps toolbar script from nettique.free.fr */
 </script>
-<script type="text/javascript" src ="../lib/FileSaver.min.js">
-/* FileSaver script from eligrey.com */
+<script type="text/javascript" src ="../lib/FileSaveTools.js">
+/* File saving helper, also includes BlobBuilder, and loads FileSaver, JSZip, downloadify, jDataView_Write */
 </script>
-	
-<script type="text/javascript" src="../src/JSShapefile_Webkit.js"></script>
+<script type="text/javascript" src="../src/JS2Shapefile.js">
+/* Main shapefile creation class */
+</script>
 
   </head>
 <body>
-<h1>google maps -> draw features -> export to shapefile (WEBKIT BROWSER ONLY)</h1>
+<h1>google maps -> draw features -> export to shapefile</h1>
 <table><tr style="vertical-align:top">
   <td style="width:15em">
 
@@ -95,10 +96,11 @@ onclick="MapToolbar.initFeature('placemark')"/></td>
     <div id="map" style="width: 700px; height: 550px"></div>
   </td>
 </tr></table>
+<div id="saveButtons"></div>
 <script type="text/javascript">
   initialize();
   function exportShapefiles(){
-  	var shapewriter = new Shapefile({shapetype:"POINT"});
+  	var shapewriter = new Shapefile();
 	var googleGraphics = [];
 	for (var g in MapToolbar.features.placemarkTab){
 		if (MapToolbar.features.placemarkTab.hasOwnProperty(g)){
@@ -116,20 +118,60 @@ onclick="MapToolbar.initFeature('placemark')"/></td>
 		}
 	}
 	shapewriter.addGoogleGraphics(googleGraphics);
-	var pointfile = shapewriter.getShapefile();
-	shapewriter.shapetype = "POLYLINE";
-	var linefile = shapewriter.getShapefile();
-	shapewriter.shapetype = "POLYGON";
-	var polygonfile = shapewriter.getShapefile();
-	saveAs(pointfile["shape"],"g_points.shp");
-	saveAs(pointfile["shx"],"g_points.shx");
-	saveAs(pointfile["dbf"],"g_points.dbf");
-	saveAs(linefile["shape"],"g_lines.shp");
-	saveAs(linefile["shx"],"g_lines.shx");
-	saveAs(linefile["dbf"],"g_lines.dbf");
-	saveAs(polygonfile["shape"],"g_polygons.shp");
-	saveAs(polygonfile["shx"],"g_polygons.shx");
-	saveAs(polygonfile["dbf"],"g_polygons.dbf");
+	var pointfile = shapewriter.getShapefile("POINT");
+	var linefile = shapewriter.getShapefile("POLYLINE");
+	var polygonfile = shapewriter.getShapefile("POLYGON");
+	if (pointfile.successful){
+		var saver = new BinaryHelper();
+		for (var actualfile in pointfile['shapefile']){
+			if (pointfile['shapefile'].hasOwnProperty(actualfile)){
+				saver.addData({
+					filename: "points_from_gmaps",
+					extension: actualfile,
+					datablob: pointfile['shapefile'][actualfile]
+				});
+			}
+		}
+		var div = document.createElement("div");
+		div.id = "pointButtonDiv";
+		div.innerHTML = "Points:";
+		document.getElementById("saveButtons").appendChild(div);
+		saver.createSaveControl("pointButtonDiv",true);
+	}
+	if (linefile.successful){
+		var saver = new BinaryHelper();
+		for (var actualfile in linefile['shapefile']){
+			if (linefile['shapefile'].hasOwnProperty(actualfile)){
+				saver.addData({
+					filename: "lines_from_gmaps",
+					extension: actualfile,
+					datablob: linefile['shapefile'][actualfile]
+				});
+			}
+		}
+		var div = document.createElement("div");
+		div.id = "lineButtonDiv";
+		div.innerHTML = "Lines:";
+		document.getElementById("saveButtons").appendChild(div);
+		saver.createSaveControl("lineButtonDiv",true);
+	}
+	if (polygonfile.successful){
+		var saver = new BinaryHelper();
+		for (var actualfile in polygonfile['shapefile']){
+			if (polygonfile['shapefile'].hasOwnProperty(actualfile)){
+				saver.addData({
+					filename: "polygons_from_gmaps",
+					extension: actualfile,
+					datablob: polygonfile['shapefile'][actualfile]
+				});
+			}
+		}
+		var div = document.createElement("div");
+		div.id = "polygonButtonDiv";
+		div.innerHTML = "Polygons:";
+		document.getElementById("saveButtons").appendChild(div);
+		saver.createSaveControl("polygonButtonDiv",true);
+	}
   }
 </script>
 </body>
