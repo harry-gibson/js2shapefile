@@ -1,16 +1,29 @@
 /** 
  * JS2Shapefile - A javascript class for generating ESRI shapefiles in the client from a variety of javascript map
- * API vector formats (ESRI Graphic, Google Maps, Openlayers (TODO)
+ * API vector formats (ESRI Graphic, Google Maps, Openlayers (TODO)). Uses HTML5 binary data techniques where
+ * available or emulations elsewhere.
  * 
- * (c) 2012-02-09 Harry Gibson 
+ * By Harry Gibson, CEH Wallingford
+ * (c) 2012
+ * ceh.ac.uk@harr1 / gmail.com@harry.s.gibson / reversed
+ * GNU / GPL v3
  * 
- * Intended as early proof of concept only, not likely to be suitable for robust use yet!
+ * Intended as early proof of concept only! It works well for the tasks I need it for...
+ * 
+ * Intended uses all of which I have tested include:
+ * - Export existing features from ArcGIS server services without the need to set up geoprocessing tasks for 
+ * 	 "clip-and-ship", or any other server-side stuff
+ * - Export graphics created as part of the user interaction in an ESRI javascript web app. E.g. a line returned
+ *   from a network analyst routing task, giving a route / drivetime polygon / whatever as a saved shapefile
+ * - Export graphics created by the user through "drawing" on the map, whether in ESRI or google maps. E.g. could
+ *   be used to set up a basic feature digitisation web app based on google maps.
  * 
  * Requires and uses the jDataView_write implementation of DataView to enable use in browsers where DataView and / or Arraybuffer
  * aren't available. 
  * Requires and uses BlobBuilder polyfill class to ensure that Blobs created are suitable for use in the saving
  * method that is available (see BinaryHelper).
- * Both of these classes must be loaded before the getShapefile function is called.
+ * Both of these classes must be loaded before the getShapefile function is called. Do this by adding the
+ * FileSaveTools script to your document as well as this file. That will load the required helpers.
  * 
  * Usage: 
  * var shapemaker = new Shapefile();
@@ -38,9 +51,10 @@
  *  }
  *  The blobs can be saved to disk using BinaryHelper
  * 
- * No awareness of projection / CRS is implemented. Output shapefile will contain coordinates in the form they were
+ * IMPORTANT: NO AWARENESS OF PROJECTION / CRS IS IMPLEMENTED!
+ * Output shapefile will contain coordinates in the form they were stored
  * in the input graphics. (The CRS of the ESRI map, or WGS84 lat/lon for google graphics). This could easily be
- * improved using proj4js or similar
+ * improved using proj4js or similar to build a library for reprojecting shapefiles in the browser
  */
 var Shapefile = (function(){
 	// some compatibility bits
@@ -670,13 +684,13 @@ var Shapefile = (function(){
 		for (var i = 0; i < graphicsArray.length; i++) {
 			var graphic = graphicsArray[i];
 			if (graphic.attributes) {
-				for (attribute in graphic.attributes) {
+				for (var attribute in graphic.attributes) {
 					if (graphic.attributes.hasOwnProperty(attribute)) {
 						var attvalue = graphic.attributes[attribute];
 						if (allAttributes.hasOwnProperty(attribute)) {
-							// TODO - CHECK TYPE, RESET NUMBER TO STRING IF NECESSARY (IE MIXED DATA)
-							if (allAttributes[attribute].length < attvalue.length) {
-								allAttributes[attribute].length = attvalue.length;
+							// Call toString on all attributes to get the length in characters
+							if (allAttributes[attribute].length < attvalue.toString().length) {
+								allAttributes[attribute].length = attvalue.toString().length;
 							}
 						}
 						else {

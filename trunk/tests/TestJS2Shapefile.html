@@ -1,12 +1,10 @@
 <html>
 	<head>
-		<meta http-equiv="Content-Type" content="text/html;charset=x-user-defined">
+<!-- Basic Hello-world test for the JS2Shapefile and FileSaveTools libraries -->
+<!-- Generates a shapefile containing 50 points randomly located between 300000,300000 and 350000,350000 -->
+<meta http-equiv="Content-Type" content="text/html;charset=x-user-defined">
 <script type="text/javascript" src ="../lib/FileSaveTools.js"></script>
-<script type="text/javascript" src="../lib/jDataView_write.js"></script>
 <script type="text/javascript" src="../src/JS2Shapefile.js"></script>
-<script type="text/javascript" src="../lib/jszip.js"></script>
-<script type="text/javascript" src="../lib/downloadify/js/swfobject.js"></script>
-<script type="text/javascript" src="../lib/downloadify/js/downloadify.js"></script>
 <script type="text/javascript">
 	
 	function createRandomGraphics(number){
@@ -41,15 +39,30 @@
 	}
 	
 	function testPointShape(){
-        var someGraphics = createRandomGraphics(10);
+        var someGraphics = createRandomGraphics(30);
         var shapewriter = new Shapefile();
 		shapewriter.addESRIGraphics(someGraphics);
 		var res = shapewriter.getShapefile("POINT");
+		// res is object with properties "successful" and "shapefile"
 		if (res.successful) {
-			//console.debug("Shapefile created, sending to FileSaver");
+			var shapefile = res['shapefile'];
+			// shapefile is object with properties "shp", "shx" and "dbf" - use these names as file extensions
 			var saver = new BinaryHelper();
-			saver.addData(res["shapefile"], "testsaver.");
+			for (var actualfile in shapefile) {
+				if (shapefile.hasOwnProperty(actualfile)) {
+					saver.addData({
+						filename: "test_shapefile",
+						extension: actualfile,
+						datablob: shapefile[actualfile]
+					});
+				}
+			}
+			// btn will be created either as normal HTML button that calls saveNative (in Chrome),
+			// or flash look-a-like which uses downloadify to save 
 			var btn = saver.createSaveControl("saveButtonDiv");
+			// in the case of Chrome we could also call saver.saveNative() programatically at this point 
+			// without need for user interaction, but downloadify can only save in response to 
+			// actual click event on its button	
 		}
 		else {
 			console.error("Error generating shapefile");

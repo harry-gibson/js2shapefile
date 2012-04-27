@@ -7,7 +7,7 @@
     <script type="text/javascript" src="http://serverapi.arcgisonline.com/jsapi/arcgis/?v=2.6"></script>
 	
 	<script type="text/javascript" src ="../lib/FileSaveTools.js"></script>
-	<script type="text/javascript" src="../lib/jDataView_write.js"></script>
+	<!--<script type="text/javascript" src="../lib/jDataView_write.js"></script>-->
 	<script type="text/javascript" src="../src/JS2Shapefile.js"></script>
 
     <script type="text/javascript">
@@ -48,35 +48,38 @@
 	  function exportShapefiles(){
 	  	var shapewriter = new Shapefile();
 		shapewriter.addESRIGraphics (map.graphics.graphics);
-		var pointfile = shapewriter.getShapefile("POINT");
-		var linefile = shapewriter.getShapefile("POLYLINE");
-		var polygonfile = shapewriter.getShapefile("POLYGON");
-		if (pointfile.successful){
-			var saver = new BinaryHelper();
-			saver.addData(pointfile["shapefile"],"points.");
-			var div = document.createElement("div");
-			div.id = "pointButtonDiv";
-			div.innerHTML = "Points:";
-			document.getElementById("saveButtons").appendChild(div);
-			saver.createSaveControl("pointButtonDiv",true);
+		var outputObject = {
+			points: shapewriter.getShapefile("POINT"),
+			lines: shapewriter.getShapefile("POLYLINE"),
+			polygons: shapewriter.getShapefile("POLYGON")
 		}
-		if (linefile.successful){
-			var saver = new BinaryHelper();
-			saver.addData(linefile["shapefile"],"lines.");
-			var div = document.createElement("div");
-			div.id = "lineButtonDiv";
-			div.innerHTML = "Lines:";
-			document.getElementById("saveButtons").appendChild(div);
-			saver.createSaveControl("lineButtonDiv",true);
+		var saver = new BinaryHelper();
+		var anythingToDo = false;
+		for (var shapefiletype in outputObject){
+			if (outputObject.hasOwnProperty(shapefiletype)){
+				if (outputObject[shapefiletype]['successful']){
+					anythingToDo = true;
+					for (actualfile in outputObject[shapefiletype]['shapefile']){
+						if (outputObject[shapefiletype]['shapefile'].hasOwnProperty(actualfile)){
+							saver.addData({
+								filename: shapefiletype+"_shapefile_from_jsapi_draw",
+								extension: actualfile,
+								datablob: outputObject[shapefiletype]['shapefile'][actualfile]
+							});
+						}
+					}
+				}
+			}
 		}
-		if (polygonfile.successful){
-			var saver = new BinaryHelper();
-			saver.addData(polygonfile["shapefile"],"polygons.");
+		if (anythingToDo) {
+			document.getElementById("saveButtons").innerHTML = "Save results";
 			var div = document.createElement("div");
-			div.id = "polygonButtonDiv";
-			div.innerHTML = "Polygons:";
+			div.id = "saveButtonDiv";
 			document.getElementById("saveButtons").appendChild(div);
-			saver.createSaveControl("polygonButtonDiv",true);
+			saver.createSaveControl("saveButtonDiv", true);
+		}
+		else {
+			document.getElementById("saveButtons").innerHTML = "No shapefiles created!";
 		}
 	  }
 	  
@@ -100,6 +103,8 @@
     <input type="button" value="Hide" onclick="map.hideZoomSlider()" />
     <input type="button" value="Show" onclick="map.showZoomSlider()" />
 	<br/>
-	<div id="saveButtons"></div>
+	<div id="saveButtons">
+		<div id="saveButtonDiv"></div>
+	</div>
   </body class="claro">
 </html>
