@@ -523,6 +523,9 @@ var Shapefile = (function(){
 				// write the decimal count into byte 17
 				dbfFieldDescView.setInt8(i * 32 + 17, fieldDecCount); // FIELD DECIMAL COUNT
 			}
+			// modify what's recorded so the attribute map doesn't have more than 18 chars even if there are more 
+			// than 18 present
+			attributeMap[i].length = parseInt(fieldLength);
 			numBytesPerRecord += parseInt(fieldLength);
 		}
 		// last byte of the array is set to 0Dh (13, newline character) to mark end of overall header
@@ -638,9 +641,13 @@ var Shapefile = (function(){
 							if (fieldLength == 0) {
 								continue;
 							}
-							if (numAsString.length != fieldLength) {
-								// if the length isn't what it should be then pad to the left
+							// bug fix: was calling lpad on != fieldLength i.e. for too-long strings too
+							if (numAsString.length < fieldLength) {
+								// if the length is too short then pad to the left
 								numAsString = numAsString.lpad(" ", fieldLength);
+							}
+							else if (numAsString.length > fieldLength){
+								numAsString = numAsString.substr(0,18);
 							}
 							for (var writeByte = 0; writeByte < fieldLength; writeByte++) {
 								dbfDataView.setUint8(currentOffset, numAsString.charCodeAt(writeByte));
