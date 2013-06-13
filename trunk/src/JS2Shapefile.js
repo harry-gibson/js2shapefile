@@ -237,7 +237,7 @@ var Shapefile = (function(){
 		// That's the fixed info, rest of header depends on contents. Start building contents now.
 		// will get extent by naive method of increasing or decreasing the min / max for each feature 
 		// outside those currently set
-		var ext_xmin = Number.MAX_VALUE, ext_ymin = Number.MAX_VALUE, ext_xmax = Number.MIN_VALUE, ext_ymax = Number.MIN_VALUE;
+		var ext_xmin = Number.MAX_VALUE, ext_ymin = Number.MAX_VALUE, ext_xmax = -Number.MAX_VALUE, ext_ymax = -Number.MAX_VALUE;
 		var numRecords = graphics.length;
 		// use the BlobBuilder polyfiller class to wrap WebkitBlobbuilder, MozBlobBuilder, or a fake blob
 		// for each record we will create a buffer via a dataview, and append it to these blobs
@@ -297,7 +297,7 @@ var Shapefile = (function(){
 				// a different property of the input graphic
 				for (var i = 1; i < numRecords + 1; i++) {
 					var graphic = graphics[i - 1];
-					var feat_xmin = Number.MAX_VALUE, feat_ymin = Number.MAX_VALUE, feat_xmax = Number.MIN_VALUE, feat_ymax = Number.MIN_VALUE;
+					var feat_xmin = Number.MAX_VALUE, feat_ymin = Number.MAX_VALUE, feat_xmax = -Number.MAX_VALUE, feat_ymax = -Number.MAX_VALUE;
 					var numParts;
 					if (shapetype == "POLYLINE") {
 						numParts = graphic.geometry.paths.length;
