@@ -222,7 +222,7 @@ Shapefile.prototype.createShapeShxFile = function(graphics){
 	shxHeaderView.setInt32(32, ShapeTypes[this.shapetype], true); // little-endian
 	// now start work on the file contents
 	// will get extent by naive method of increasing or decreasing the min / max for each feature outside those currently set
-	var ext_xmin = Number.MAX_VALUE, ext_ymin = Number.MAX_VALUE, ext_xmax = Number.MIN_VALUE, ext_ymax = Number.MIN_VALUE;
+	var ext_xmin = Number.MAX_VALUE, ext_ymin = Number.MAX_VALUE, ext_xmax = -Number.MAX_VALUE, ext_ymax = -Number.MAX_VALUE;
 	var numRecords = graphics.length;
 	//var shapeContentBlobObject = new WebKitBlobBuilder();
 	//var shxContentBlobObject = new WebKitBlobBuilder();
@@ -325,7 +325,7 @@ Shapefile.prototype.createShapeShxFileWebkit = function(graphics){
 	shxHeaderView.setInt32(32, ShapeTypes[this.shapetype], true); // little-endian
 	// now start work on the file contents
 	// will get extent by naive method of increasing or decreasing the min / max for each feature outside those currently set
-	var ext_xmin = Number.MAX_VALUE, ext_ymin = Number.MAX_VALUE, ext_xmax = Number.MIN_VALUE, ext_ymax = Number.MIN_VALUE;
+	var ext_xmin = Number.MAX_VALUE, ext_ymin = Number.MAX_VALUE, ext_xmax = -Number.MAX_VALUE, ext_ymax = -Number.MAX_VALUE;
 	var numRecords = graphics.length;
 	var shapeContentBlobObject = new WebKitBlobBuilder();
 	var shxContentBlobObject = new WebKitBlobBuilder();
@@ -395,7 +395,7 @@ Shapefile.prototype.createShapeShxFileWebkit = function(graphics){
 		 */
 			for (var i = 1; i < numRecords + 1; i++) {
 				var graphic = graphics[i - 1];
-				var feat_xmin = Number.MAX_VALUE, feat_ymin = Number.MAX_VALUE, feat_xmax = Number.MIN_VALUE, feat_ymax = Number.MIN_VALUE;
+				var feat_xmin = Number.MAX_VALUE, feat_ymin = Number.MAX_VALUE, feat_xmax = -Number.MAX_VALUE, feat_ymax = -Number.MAX_VALUE;
 				var numParts;
 				if (this.shapetype=="POLYLINE") {
 					numParts = graphic.geometry.paths.length;
