@@ -334,17 +334,14 @@ var Shapefile = (function(){
 						if (thisPoint[0] < feat_xmin) {
 							feat_xmin = thisPoint[0];
 						}
-						else 
-							if (thisPoint[0] > feat_xmax) {
+						if (thisPoint[0] > feat_xmax) {
 								feat_xmax = thisPoint[0];
-							}
+						}
 						if (thisPoint[1] < feat_ymin) {
 							feat_ymin = thisPoint[1];
 						}
-						else {
-							if (thisPoint[1] > feat_ymax) {
+						if (thisPoint[1] > feat_ymax) {
 								feat_ymax = thisPoint[1];
-							}
 						}
 					}
 					// length of record contents excluding the vertices themselves is 44 + 4*numparts
