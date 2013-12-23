@@ -124,15 +124,47 @@ var Shapefile = (function(){
 			}
 		}
 	}
-	// TO DO!
+
 	// "translate" the openlayers graphics item to something compatible with the esri format before adding
-	var addOLGraphics = function(openlayersgraphics){
+	var addOLGraphics = function (openlayersgraphics) {
 		for (var i = 0; i < openlayersgraphics.length; i++) {
+			var feature = openlayersgraphics[i];
 			var quasiEsriGraphic = {
+				attributes: feature.attributes,
 				geometry: {}
+			};
+			if (feature.geometry.CLASS_NAME === "OpenLayers.Geometry.Point") {
+				quasiEsriGraphic.geometry.type = "POINT";
+				quasiEsriGraphic.geometry.x = feature.geometry.x;
+				quasiEsriGraphic.geometry.y = feature.geometry.y;
+				this._pointgraphics.push(quasiEsriGraphic);
+			} else if (feature.geometry.CLASS_NAME === "OpenLayers.Geometry.LineString") {
+				quasiEsriGraphic.geometry.type = "POLYLINE";
+				quasiEsriGraphic.geometry.paths = [];
+				var path = [];
+				for (var j = 0; j < feature.geometry.components.length; j++) {
+					var point = feature.geometry.components[j];
+					path.push([point.x, point.y]);
+				}
+				quasiEsriGraphic.geometry.paths.push(path);
+				this._polylinegraphics.push(quasiEsriGraphic);
+			} else if (feature.geometry.CLASS_NAME === "OpenLayers.Geometry.Polygon") {
+				quasiEsriGraphic.geometry.type = "POLYGON";
+				var rings = [];
+				for (var j = 0; j < feature.geometry.components.length; j++) {
+					var ring = [];
+					var contour = feature.geometry.components[j];
+					for (var k = 0; k < contour.components.length; k++) {
+						var point = contour.components[k];
+						ring.push([point.x, point.y]);
+					}
+					rings.push(ring);
+				}
+				quasiEsriGraphic.geometry.rings = rings;
+				this._polygongraphics.push(quasiEsriGraphic);
 			}
 		}
-	}
+	};
 	// "translate" the gmapsgraphics to something that quacks like an esri graphic before adding
 	var addGoogleGraphics = function(googlegraphics){
 		for (var i = 0; i < googlegraphics.length; i++) {
